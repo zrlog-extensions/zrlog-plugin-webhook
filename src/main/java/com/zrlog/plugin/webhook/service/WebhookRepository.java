@@ -3,8 +3,7 @@ package com.zrlog.plugin.webhook.service;
 import com.google.gson.Gson;
 import com.zrlog.plugin.IOSession;
 import com.zrlog.plugin.common.LoggerUtil;
-import com.zrlog.plugin.data.codec.ContentType;
-import com.zrlog.plugin.type.ActionType;
+import com.zrlog.plugin.common.SessionKvRepository;
 import com.zrlog.plugin.webhook.model.WebhookConfig;
 import com.zrlog.plugin.webhook.model.WebhookLogEntry;
 import com.zrlog.plugin.webhook.model.WebhookLogStore;
@@ -60,20 +59,16 @@ public class WebhookRepository {
     }
 
     public synchronized WebhookConfig readConfig(IOSession session) {
-        Map<String, String> request = new HashMap<>();
-        request.put("key", CONFIG_KEYS);
-        Map responseMap = session.getResponseSync(ContentType.JSON, request, ActionType.GET_WEBSITE, Map.class);
+        Map<String, Object> responseMap = SessionKvRepository.of(session).read(CONFIG_KEYS);
         WebhookConfig config = new WebhookConfig();
-        if (responseMap != null) {
-            config.setWebhookUrl(firstNonBlank(stringValue(responseMap.get(WEBHOOK_URL_KEY)),
-                    stringValue(responseMap.get(LEGACY_FEISHU_WEBHOOK_URL_KEY))));
-            config.setTargetType(normalizeTargetType(stringValue(responseMap.get(TARGET_TYPE_KEY))));
-            config.setSigningSecret(firstNonBlank(stringValue(responseMap.get(SIGNING_SECRET_KEY)),
-                    stringValue(responseMap.get(LEGACY_FEISHU_SECRET_KEY))));
-            config.setIncomingToken(stringValue(responseMap.get(INCOMING_TOKEN_KEY)));
-            config.setTimeoutSeconds(normalizeTimeoutSeconds(stringValue(responseMap.get(TIMEOUT_SECONDS_KEY))));
-            config.setRetentionDays(normalizeRetentionDays(stringValue(responseMap.get(RETENTION_DAYS_KEY))));
-        }
+        config.setWebhookUrl(firstNonBlank(stringValue(responseMap.get(WEBHOOK_URL_KEY)),
+                stringValue(responseMap.get(LEGACY_FEISHU_WEBHOOK_URL_KEY))));
+        config.setTargetType(normalizeTargetType(stringValue(responseMap.get(TARGET_TYPE_KEY))));
+        config.setSigningSecret(firstNonBlank(stringValue(responseMap.get(SIGNING_SECRET_KEY)),
+                stringValue(responseMap.get(LEGACY_FEISHU_SECRET_KEY))));
+        config.setIncomingToken(stringValue(responseMap.get(INCOMING_TOKEN_KEY)));
+        config.setTimeoutSeconds(normalizeTimeoutSeconds(stringValue(responseMap.get(TIMEOUT_SECONDS_KEY))));
+        config.setRetentionDays(normalizeRetentionDays(stringValue(responseMap.get(RETENTION_DAYS_KEY))));
         if (!notBlank(config.getIncomingToken())) {
             config.setIncomingToken(newToken());
             writeWebsiteValue(session, INCOMING_TOKEN_KEY, config.getIncomingToken());
@@ -110,7 +105,7 @@ public class WebhookRepository {
         request.put(INCOMING_TOKEN_KEY, config.getIncomingToken());
         request.put(TIMEOUT_SECONDS_KEY, String.valueOf(config.getTimeoutSeconds()));
         request.put(RETENTION_DAYS_KEY, String.valueOf(config.getRetentionDays()));
-        session.getResponseSync(ContentType.JSON, request, ActionType.SET_WEBSITE, Map.class);
+        SessionKvRepository.of(session).write(request);
         return config;
     }
 
@@ -295,19 +290,11 @@ public class WebhookRepository {
     }
 
     private String readWebsiteValue(IOSession session, String key) {
-        Map<String, String> request = new HashMap<>();
-        request.put("key", key);
-        Map responseMap = session.getResponseSync(ContentType.JSON, request, ActionType.GET_WEBSITE, Map.class);
-        if (responseMap == null || responseMap.get(key) == null) {
-            return "";
-        }
-        return String.valueOf(responseMap.get(key));
+        return SessionKvRepository.of(session).get(key).orElse("");
     }
 
     private void writeWebsiteValue(IOSession session, String key, String value) {
-        Map<String, String> request = new HashMap<>();
-        request.put(key, value);
-        session.getResponseSync(ContentType.JSON, request, ActionType.SET_WEBSITE, Map.class);
+        SessionKvRepository.of(session).put(key, value);
     }
 
     private int normalizeRetentionDays(String value) {
