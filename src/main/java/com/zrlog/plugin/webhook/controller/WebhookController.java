@@ -134,9 +134,11 @@ public class WebhookController {
             if (body.trim().startsWith("{")) {
                 try {
                     Map<String, Object> map = gson.fromJson(body, Map.class);
-                    return map == null ? new HashMap<String, Object>() : map;
+                    if (map != null) {
+                        return map;
+                    }
                 } catch (Exception ignored) {
-                    return new HashMap<>();
+                    // Fall through to the form parser. The host may pass a ByteBuffer backing array with trailing bytes.
                 }
             }
             Map<String, Object> formBody = parseFormBody(body);
@@ -154,7 +156,12 @@ public class WebhookController {
         if (requestInfo.getRequestBody() == null || requestInfo.getRequestBody().length == 0) {
             return "";
         }
-        return new String(requestInfo.getRequestBody(), StandardCharsets.UTF_8);
+        byte[] bytes = requestInfo.getRequestBody();
+        int length = bytes.length;
+        while (length > 0 && bytes[length - 1] == 0) {
+            length--;
+        }
+        return new String(bytes, 0, length, StandardCharsets.UTF_8);
     }
 
     private Map<String, Object> parseFormBody(String body) {

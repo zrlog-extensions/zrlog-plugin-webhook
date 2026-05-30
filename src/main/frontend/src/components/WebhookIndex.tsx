@@ -65,6 +65,7 @@ const targetTypeOptions = [
 const request = async <T, >(url: string, params?: Record<string, string>) => {
     const {data} = await axios.post<StandardResponse<T>>(url, params || {}, {
         headers: {"Content-Type": "application/json;charset=UTF-8"},
+        params,
     });
     if (!data.success) {
         throw new Error(data.message || "操作失败");
