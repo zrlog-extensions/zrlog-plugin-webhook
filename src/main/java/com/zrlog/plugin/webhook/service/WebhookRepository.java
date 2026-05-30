@@ -79,9 +79,9 @@ public class WebhookRepository {
     public synchronized WebhookConfig saveConfig(IOSession session, Map<String, Object> params) {
         WebhookConfig existing = readConfig(session);
         WebhookConfig config = new WebhookConfig();
-        config.setWebhookUrl(limit(stringValue(params.get(WEBHOOK_URL_KEY)), 1000));
-        config.setTargetType(normalizeTargetType(stringValue(params.get(TARGET_TYPE_KEY))));
-        config.setSigningSecret(limit(stringValue(params.get(SIGNING_SECRET_KEY)), 240));
+        config.setWebhookUrl(limit(valueOrExisting(params, WEBHOOK_URL_KEY, existing.getWebhookUrl()), 1000));
+        config.setTargetType(normalizeTargetType(valueOrExisting(params, TARGET_TYPE_KEY, existing.getTargetType())));
+        config.setSigningSecret(limit(valueOrExisting(params, SIGNING_SECRET_KEY, existing.getSigningSecret()), 240));
         String incomingToken = limit(stringValue(params.get("incomingToken")), 160);
         config.setIncomingToken(notBlank(incomingToken) ? incomingToken : existing.getIncomingToken());
         String timeoutSeconds = stringValue(params.get(TIMEOUT_SECONDS_KEY));
@@ -341,6 +341,13 @@ public class WebhookRepository {
             return String.valueOf(((List) value).get(0));
         }
         return String.valueOf(value);
+    }
+
+    private String valueOrExisting(Map<String, Object> params, String key, String existingValue) {
+        if (params != null && params.containsKey(key)) {
+            return stringValue(params.get(key));
+        }
+        return existingValue == null ? "" : existingValue;
     }
 
     private LocalDate toDay(long time) {

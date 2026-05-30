@@ -12,6 +12,7 @@ import com.zrlog.plugin.webhook.service.WebhookDeliveryClient;
 import com.zrlog.plugin.webhook.service.WebhookRepository;
 
 import java.nio.charset.StandardCharsets;
+import java.net.URLDecoder;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -138,6 +139,10 @@ public class WebhookController {
                     return new HashMap<>();
                 }
             }
+            Map<String, Object> formBody = parseFormBody(body);
+            if (!formBody.isEmpty()) {
+                return formBody;
+            }
         }
         if (requestInfo.getParam() == null) {
             return new HashMap<>();
@@ -150,6 +155,34 @@ public class WebhookController {
             return "";
         }
         return new String(requestInfo.getRequestBody(), StandardCharsets.UTF_8);
+    }
+
+    private Map<String, Object> parseFormBody(String body) {
+        Map<String, Object> map = new HashMap<>();
+        if (!notBlank(body) || !body.contains("=")) {
+            return map;
+        }
+        String[] pairs = body.split("&");
+        for (String pair : pairs) {
+            int index = pair.indexOf('=');
+            if (index < 0) {
+                continue;
+            }
+            String key = decode(pair.substring(0, index));
+            String value = decode(pair.substring(index + 1));
+            if (notBlank(key)) {
+                map.put(key, value);
+            }
+        }
+        return map;
+    }
+
+    private String decode(String value) {
+        try {
+            return URLDecoder.decode(value, StandardCharsets.UTF_8.name());
+        } catch (Exception e) {
+            return value;
+        }
     }
 
     private boolean authPassed(WebhookConfig config, Map<String, Object> params) {
