@@ -1,5 +1,7 @@
 package com.zrlog.plugin.webhook;
 
+import com.zrlog.plugin.RunConstants;
+import com.zrlog.plugin.type.RunType;
 import com.zrlog.plugin.common.PluginNativeImageUtils;
 import com.zrlog.plugin.webhook.controller.WebhookController;
 import com.zrlog.plugin.webhook.model.WebhookConfig;
@@ -16,6 +18,7 @@ import java.util.Collections;
 public class GraalvmAgentApplication {
 
     public static void main(String[] args) throws IOException {
+        RunConstants.runType = RunType.AGENT;
         PluginNativeImageUtils.gsonNativeAgentByClazz(Arrays.asList(
                 WebhookConfig.class,
                 WebhookLogEntry.class,
