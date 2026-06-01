@@ -12,7 +12,6 @@ import com.zrlog.plugin.webhook.service.WebhookDeliveryClient;
 import com.zrlog.plugin.webhook.service.WebhookRepository;
 
 import java.nio.charset.StandardCharsets;
-import java.net.URLDecoder;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -130,26 +129,41 @@ public class WebhookController {
 
     private Map<String, Object> params() {
         if (requestInfo.getRequestBody() != null && requestInfo.getRequestBody().length > 0) {
-            String body = bodyText();
-            if (body.trim().startsWith("{")) {
-                try {
-                    Map<String, Object> map = gson.fromJson(body, Map.class);
-                    if (map != null) {
-                        return map;
-                    }
-                } catch (Exception ignored) {
-                    // Fall through to the form parser. The host may pass a ByteBuffer backing array with trailing bytes.
-                }
-            }
-            Map<String, Object> formBody = parseFormBody(body);
-            if (!formBody.isEmpty()) {
-                return formBody;
+            Map<String, Object> jsonBody = parseJsonBody(bodyText().trim());
+            if (jsonBody != null) {
+                return jsonBody;
             }
         }
+        return paramMap();
+    }
+
+    private Map<String, Object> paramMap() {
         if (requestInfo.getParam() == null) {
             return new HashMap<>();
         }
         return requestInfo.simpleParam();
+    }
+
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> parseJsonBody(String body) {
+        try {
+            Map<String, Object> map = gson.fromJson(body, Map.class);
+            if (map != null) {
+                return map;
+            }
+        } catch (Exception ignored) {
+            // The host may pass a ByteBuffer backing array with trailing bytes.
+        }
+        int objectEnd = body.lastIndexOf('}');
+        if (objectEnd < 0 || objectEnd == body.length() - 1) {
+            return null;
+        }
+        try {
+            Map<String, Object> map = gson.fromJson(body.substring(0, objectEnd + 1), Map.class);
+            return map == null ? null : map;
+        } catch (Exception ignored) {
+            return null;
+        }
     }
 
     private String bodyText() {
@@ -162,34 +176,6 @@ public class WebhookController {
             length--;
         }
         return new String(bytes, 0, length, StandardCharsets.UTF_8);
-    }
-
-    private Map<String, Object> parseFormBody(String body) {
-        Map<String, Object> map = new HashMap<>();
-        if (!notBlank(body) || !body.contains("=")) {
-            return map;
-        }
-        String[] pairs = body.split("&");
-        for (String pair : pairs) {
-            int index = pair.indexOf('=');
-            if (index < 0) {
-                continue;
-            }
-            String key = decode(pair.substring(0, index));
-            String value = decode(pair.substring(index + 1));
-            if (notBlank(key)) {
-                map.put(key, value);
-            }
-        }
-        return map;
-    }
-
-    private String decode(String value) {
-        try {
-            return URLDecoder.decode(value, StandardCharsets.UTF_8.name());
-        } catch (Exception e) {
-            return value;
-        }
     }
 
     private boolean authPassed(WebhookConfig config, Map<String, Object> params) {

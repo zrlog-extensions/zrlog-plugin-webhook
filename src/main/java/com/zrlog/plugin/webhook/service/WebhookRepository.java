@@ -69,10 +69,6 @@ public class WebhookRepository {
         config.setIncomingToken(stringValue(responseMap.get(INCOMING_TOKEN_KEY)));
         config.setTimeoutSeconds(normalizeTimeoutSeconds(stringValue(responseMap.get(TIMEOUT_SECONDS_KEY))));
         config.setRetentionDays(normalizeRetentionDays(stringValue(responseMap.get(RETENTION_DAYS_KEY))));
-        if (!notBlank(config.getIncomingToken())) {
-            config.setIncomingToken(newToken());
-            writeWebsiteValue(session, INCOMING_TOKEN_KEY, config.getIncomingToken());
-        }
         return config;
     }
 
@@ -87,6 +83,9 @@ public class WebhookRepository {
                 SIGNING_SECRET_KEY, LEGACY_FEISHU_SECRET_KEY), 240));
         String incomingToken = limit(stringValue(params.get("incomingToken")), 160);
         config.setIncomingToken(notBlank(incomingToken) ? incomingToken : existing.getIncomingToken());
+        if (!notBlank(config.getIncomingToken())) {
+            config.setIncomingToken(newToken());
+        }
         String timeoutSeconds = stringValue(params.get(TIMEOUT_SECONDS_KEY));
         if (!notBlank(timeoutSeconds)) {
             timeoutSeconds = stringValue(params.get("timeoutSeconds"));

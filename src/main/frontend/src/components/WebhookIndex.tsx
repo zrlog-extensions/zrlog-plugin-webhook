@@ -65,7 +65,6 @@ const targetTypeOptions = [
 const request = async <T, >(url: string, params?: Record<string, string>) => {
     const {data} = await axios.post<StandardResponse<T>>(url, params || {}, {
         headers: {"Content-Type": "application/json;charset=UTF-8"},
-        params,
     });
     if (!data.success) {
         throw new Error(data.message || "操作失败");
@@ -437,7 +436,7 @@ const WebhookIndex: FunctionComponent<WebhookIndexProps> = ({data}) => {
                     <Form.Item label="签名密钥" name="signingSecret">
                         <Input.Password placeholder="当前用于飞书机器人签名校验，未开启时可留空"/>
                     </Form.Item>
-                    <Form.Item label="入站 Token" name="incomingToken" rules={[{required: true, message: "请输入入站 Token"}]}>
+                    <Form.Item label="入站 Token" name="incomingToken">
                         <Input/>
                     </Form.Item>
                     <Form.Item label="请求超时" name="timeoutSeconds">
