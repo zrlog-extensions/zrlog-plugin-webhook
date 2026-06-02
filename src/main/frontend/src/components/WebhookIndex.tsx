@@ -123,6 +123,8 @@ const WebhookIndex: FunctionComponent<WebhookIndexProps> = ({data}) => {
     const [messageApi, contextHolder] = message.useMessage();
     const {token} = theme.useToken();
     const screens = Grid.useBreakpoint();
+    const isPhone = Boolean(screens.xs && !screens.sm);
+    const isCompact = !screens.lg;
 
     const loadLogs = async (page = logs.page, pageSize = logs.pageSize, nextFilters = filters) => {
         setLoading(true);
@@ -268,28 +270,28 @@ const WebhookIndex: FunctionComponent<WebhookIndexProps> = ({data}) => {
         <div style={{
             width: "100%",
             maxWidth: 1180,
-            padding: screens.xs ? 16 : 24,
+            padding: isPhone ? 12 : isCompact ? 16 : 24,
             boxSizing: "border-box",
             margin: "0 auto",
         }}>
             {contextHolder}
             <Flex
                 justify="space-between"
-                align={screens.xs ? "stretch" : "flex-start"}
-                vertical={screens.xs}
+                align={isCompact ? "stretch" : "flex-start"}
+                vertical={isCompact}
                 gap={16}
                 style={{ marginBottom: 20 }}
             >
                 <div>
-                    <Typography.Title level={3} style={{ margin: 0 }}>Webhook 通知</Typography.Title>
+                    <Typography.Title level={3} style={{ margin: 0, fontSize: isPhone ? 20 : undefined }}>Webhook 通知</Typography.Title>
                     <Typography.Text type="secondary" style={{ marginTop: 4, display: "block" }}>
                         通用 Webhook 通知通道和最近 {config.retentionDays || 30} 天 Webhook 记录
                     </Typography.Text>
                 </div>
-                <Space wrap>
-                    <Button icon={<ReloadOutlined/>} onClick={refreshPage} loading={loading}>刷新</Button>
-                    <Button icon={<SendOutlined/>} onClick={sendTest} loading={loading}>测试推送</Button>
-                    <Button icon={<SettingOutlined/>} onClick={openSetting}>设置</Button>
+                <Space wrap style={{width: isPhone ? "100%" : undefined}}>
+                    <Button icon={<ReloadOutlined/>} onClick={refreshPage} loading={loading} style={isPhone ? {flex: 1} : undefined}>刷新</Button>
+                    <Button icon={<SendOutlined/>} onClick={sendTest} loading={loading} style={isPhone ? {flex: 1} : undefined}>测试推送</Button>
+                    <Button icon={<SettingOutlined/>} onClick={openSetting} style={isPhone ? {flex: 1} : undefined}>设置</Button>
                 </Space>
             </Flex>
 
@@ -327,8 +329,8 @@ const WebhookIndex: FunctionComponent<WebhookIndexProps> = ({data}) => {
                         <Typography.Text copyable>{data.incomingPath}</Typography.Text>
                     </Descriptions.Item>
                     <Descriptions.Item label="认证">
-                        <Space>
-                            <Typography.Text code>Authorization: Bearer {config.incomingToken || "-"}</Typography.Text>
+                        <Space wrap style={{maxWidth: "100%"}}>
+                            <Typography.Text code style={{overflowWrap: "anywhere"}}>Authorization: Bearer {config.incomingToken || "-"}</Typography.Text>
                             <Tooltip title="复制 Token">
                                 <Button size="small" icon={<CopyOutlined/>} onClick={copyToken}/>
                             </Tooltip>
@@ -362,12 +364,12 @@ const WebhookIndex: FunctionComponent<WebhookIndexProps> = ({data}) => {
             <Card>
                 <Flex
                     justify="space-between"
-                    align={screens.xs ? "stretch" : "center"}
-                    vertical={screens.xs}
+                    align={isCompact ? "stretch" : "center"}
+                    vertical={isCompact}
                     gap={12}
                     style={{ marginBottom: 12 }}
                 >
-                    <Space wrap>
+                    <Space wrap style={{width: isPhone ? "100%" : undefined}}>
                         <Input.Search
                             allowClear
                             placeholder="搜索标题、来源、内容、错误"
@@ -376,7 +378,7 @@ const WebhookIndex: FunctionComponent<WebhookIndexProps> = ({data}) => {
                                 setFilters(next);
                                 loadLogs(1, logs.pageSize, next);
                             }}
-                            style={{width: 260}}
+                            style={{width: isPhone ? "100%" : 260}}
                         />
                         <Select
                             value={filters.status || ""}
@@ -386,7 +388,7 @@ const WebhookIndex: FunctionComponent<WebhookIndexProps> = ({data}) => {
                                 setFilters(next);
                                 loadLogs(1, logs.pageSize, next);
                             }}
-                            style={{width: 120}}
+                            style={{width: isPhone ? "100%" : 120}}
                         />
                         <Select
                             value={filters.direction || ""}
@@ -396,14 +398,14 @@ const WebhookIndex: FunctionComponent<WebhookIndexProps> = ({data}) => {
                                 setFilters(next);
                                 loadLogs(1, logs.pageSize, next);
                             }}
-                            style={{width: 132}}
+                            style={{width: isPhone ? "100%" : 132}}
                         />
                     </Space>
                     <Typography.Text type="secondary">共 {logs.total} 条</Typography.Text>
                 </Flex>
                 <Table
                     rowKey="id"
-                    size="middle"
+                    size={isPhone ? "small" : "middle"}
                     loading={loading}
                     columns={columns}
                     dataSource={logs.rows}
@@ -422,7 +424,7 @@ const WebhookIndex: FunctionComponent<WebhookIndexProps> = ({data}) => {
             <Drawer
                 title="Webhook 设置"
                 open={settingOpen}
-                width={520}
+                width={isPhone ? "100%" : 520}
                 onClose={() => setSettingOpen(false)}
                 extra={<Button type="primary" onClick={saveSetting}>保存</Button>}
             >
@@ -440,7 +442,7 @@ const WebhookIndex: FunctionComponent<WebhookIndexProps> = ({data}) => {
                         <Input/>
                     </Form.Item>
                     <Form.Item label="请求超时" name="timeoutSeconds">
-                        <InputNumber min={3} max={60} addonAfter="秒" style={{width: 160}}/>
+                        <InputNumber min={3} max={60} addonAfter="秒" style={{width: isPhone ? "100%" : 160}}/>
                     </Form.Item>
                     <Form.Item label="记录保留" name="retentionDays">
                         <Select options={retentionOptions}/>
@@ -451,7 +453,7 @@ const WebhookIndex: FunctionComponent<WebhookIndexProps> = ({data}) => {
             <Drawer
                 title="Webhook 详情"
                 open={detail !== null}
-                width={600}
+                width={isPhone ? "100%" : 600}
                 onClose={() => setDetail(null)}
             >
                 {detail && (
