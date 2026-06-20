@@ -316,7 +316,7 @@ const WebhookIndex: FunctionComponent<WebhookIndexProps> = ({data}) => {
                 type={config.webhookUrl ? "success" : "info"}
                 showIcon
                 message={config.webhookUrl ? "Webhook 目标已配置" : "Webhook 目标未配置"}
-                description={config.webhookUrl ? `标准通知会按 ${targetTypeLabel} 格式推送。` : "配置 Webhook 地址后，通知中心可以把消息推送到外部系统。"}
+                description={config.webhookUrl ? `系统通知会按 ${targetTypeLabel} 格式推送。` : "配置 Webhook 地址后，通知中心可以把消息推送到外部系统。"}
                 action={<Button size="small" onClick={openSetting}>设置</Button>}
             />
 

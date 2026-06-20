@@ -23,7 +23,7 @@ import java.util.Map;
         key = "notification.webhook.send",
         type = "notification_channel",
         label = "发送 Webhook 通知",
-        description = "通过已配置的 Webhook 目标推送标准通知。",
+        description = "通过已配置的 Webhook 目标推送系统通知。",
         exposure = {"notification"},
         channel = "webhook",
         timeoutSeconds = 30
