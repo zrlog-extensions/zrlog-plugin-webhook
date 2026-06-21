@@ -263,7 +263,7 @@ const WebhookIndex: FunctionComponent<WebhookIndexProps> = ({data}) => {
     ], []);
 
     const incomingCurl = `curl -X POST '${data.incomingPath}' -H 'Authorization: Bearer ${config.incomingToken || ""}' -H 'Content-Type: application/json' -d '{"title":"测试","content":"来自外部系统"}'`;
-    const emptyDescription = "暂无 Webhook 记录。发送测试消息或外部系统调用入站入口后会显示记录。";
+    const emptyDescription = "暂无 Webhook 记录，发送测试消息或外部系统调用入站入口后会显示记录";
     const targetTypeLabel = targetTypeOptions.find(item => item.value === config.targetType)?.label || "飞书机器人";
 
     return (
@@ -316,7 +316,7 @@ const WebhookIndex: FunctionComponent<WebhookIndexProps> = ({data}) => {
                 type={config.webhookUrl ? "success" : "info"}
                 showIcon
                 message={config.webhookUrl ? "Webhook 目标已配置" : "Webhook 目标未配置"}
-                description={config.webhookUrl ? `系统通知会按 ${targetTypeLabel} 格式推送。` : "配置 Webhook 地址后，通知中心可以把消息推送到外部系统。"}
+                description={config.webhookUrl ? `系统通知会按 ${targetTypeLabel} 格式推送` : "配置 Webhook 地址后，通知中心可以把消息推送到外部系统"}
                 action={<Button size="small" onClick={openSetting}>设置</Button>}
             />
 
