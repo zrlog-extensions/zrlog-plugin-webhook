@@ -5,10 +5,19 @@ import com.zrlog.plugin.common.LoggerUtil;
 import com.zrlog.plugin.type.RunType;
 import com.zrlog.plugin.common.PluginNativeImageUtils;
 import com.zrlog.plugin.webhook.controller.WebhookController;
+import com.zrlog.plugin.webhook.model.WebhookApiResponse;
 import com.zrlog.plugin.webhook.model.WebhookConfig;
+import com.zrlog.plugin.webhook.model.WebhookConfigValues;
+import com.zrlog.plugin.webhook.model.WebhookDeliveryResponse;
 import com.zrlog.plugin.webhook.model.WebhookLogEntry;
 import com.zrlog.plugin.webhook.model.WebhookLogStore;
+import com.zrlog.plugin.webhook.model.WebhookPageData;
+import com.zrlog.plugin.webhook.model.WebhookRemoteResponse;
+import com.zrlog.plugin.webhook.model.WebhookRequestParams;
+import com.zrlog.plugin.webhook.model.WebhookSendEnvelope;
+import com.zrlog.plugin.webhook.model.WebhookSendRequest;
 import com.zrlog.plugin.webhook.model.WebhookSendResult;
+import com.zrlog.plugin.webhook.model.WebsiteKeyRequest;
 import com.zrlog.plugin.webhook.service.WebhookNotificationService;
 
 import java.io.File;
@@ -25,9 +34,18 @@ public class GraalvmAgentApplication {
     public static void main(String[] args) throws IOException {
         RunConstants.runType = RunType.AGENT;
         PluginNativeImageUtils.gsonNativeAgentByClazz(Arrays.asList(
+                WebsiteKeyRequest.class,
+                WebhookApiResponse.class,
                 WebhookConfig.class,
+                WebhookConfigValues.class,
+                WebhookDeliveryResponse.class,
                 WebhookLogEntry.class,
                 WebhookLogStore.class,
+                WebhookPageData.class,
+                WebhookRemoteResponse.class,
+                WebhookRequestParams.class,
+                WebhookSendEnvelope.class,
+                WebhookSendRequest.class,
                 WebhookSendResult.class
         ));
         String basePath = System.getProperty("user.dir").replace("\\target", "").replace("/target", "");

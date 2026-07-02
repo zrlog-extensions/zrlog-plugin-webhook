@@ -11,12 +11,10 @@ import com.zrlog.plugin.data.codec.MsgPacketStatus;
 import com.zrlog.plugin.message.CapabilityInvokeResult;
 import com.zrlog.plugin.type.ActionType;
 import com.zrlog.plugin.webhook.model.WebhookConfig;
+import com.zrlog.plugin.webhook.model.WebhookDeliveryResponse;
+import com.zrlog.plugin.webhook.model.WebhookSendEnvelope;
+import com.zrlog.plugin.webhook.model.WebhookSendRequest;
 import com.zrlog.plugin.webhook.model.WebhookSendResult;
-
-import java.util.HashMap;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
 
 @Service("webhookService")
 @Capability(
@@ -36,10 +34,9 @@ public class WebhookNotificationService implements IPluginService {
 
     @Override
     public void handle(IOSession ioSession, MsgPacket requestPacket) {
-        Map<String, Object> rawRequestMap = parseMap(requestPacket.getDataStr());
-        Map<String, Object> requestMap = payloadMap(requestPacket, rawRequestMap);
-        SendContext context = parseContext(requestMap);
-        Map<String, Object> response = new LinkedHashMap<>();
+        WebhookSendRequest request = parseRequest(requestPacket);
+        SendContext context = parseContext(request);
+        WebhookDeliveryResponse response = new WebhookDeliveryResponse();
         int status = 200;
         String error = "";
         try {
@@ -52,12 +49,12 @@ public class WebhookNotificationService implements IPluginService {
                     status = 400;
                     error = "Webhook 插件未配置：Webhook 地址";
                 } else {
-                    WebhookSendResult result = webhookDeliveryClient.send(ioSession, config, requestMap);
+                    WebhookSendResult result = webhookDeliveryClient.send(ioSession, config, request);
                     status = result.getStatus();
                     error = result.getError();
-                    response.put("responseBody", result.getResponseBody());
-                    response.put("channel", WebhookRepository.CHANNEL_WEBHOOK);
-                    response.put("targetType", config.getTargetType());
+                    response = WebhookDeliveryResponse.from(result);
+                    response.setChannel(WebhookRepository.CHANNEL_WEBHOOK);
+                    response.setTargetType(config.getTargetType());
                     REPOSITORY.record(ioSession, WebhookRepository.DIRECTION_OUTBOUND, WebhookRepository.CHANNEL_WEBHOOK,
                             context.title, context.content, context.source, result.isSuccess(), status, error, context.requestId);
                     sendResponse(ioSession, requestPacket, response, result.isSuccess() ? 200 : status, error);
@@ -73,61 +70,49 @@ public class WebhookNotificationService implements IPluginService {
         sendResponse(ioSession, requestPacket, response, status, error);
     }
 
-    private SendContext parseContext(Map<String, Object> requestMap) {
+    private SendContext parseContext(WebhookSendRequest request) {
         SendContext context = new SendContext();
-        context.title = firstString(requestMap.get("title"));
-        context.content = firstString(requestMap.get("content"));
-        context.source = source(requestMap);
-        context.requestId = firstString(requestMap.get("requestId"));
+        context.title = text(request.getTitle());
+        context.content = text(request.getContent());
+        context.source = request.sourceText();
+        context.requestId = text(request.getRequestId());
         return context;
     }
 
-    private Map<String, Object> payloadMap(MsgPacket requestPacket, Map<String, Object> rawRequestMap) {
-        if (ActionType.CAPABILITY_INVOKE.name().equals(requestPacket.getMethodStr())
-                && rawRequestMap != null && rawRequestMap.get("payload") instanceof Map) {
-            return (Map<String, Object>) rawRequestMap.get("payload");
-        }
-        return rawRequestMap == null ? new HashMap<String, Object>() : rawRequestMap;
-    }
-
-    private Map<String, Object> parseMap(String json) {
+    private WebhookSendRequest parseRequest(MsgPacket requestPacket) {
+        String json = requestPacket.getDataStr();
         if (!notBlank(json)) {
-            return new HashMap<>();
+            return new WebhookSendRequest();
         }
         try {
-            Map<String, Object> map = gson.fromJson(json, Map.class);
-            return map == null ? new HashMap<String, Object>() : map;
+            if (ActionType.CAPABILITY_INVOKE.name().equals(requestPacket.getMethodStr())) {
+                WebhookSendEnvelope envelope = gson.fromJson(json, WebhookSendEnvelope.class);
+                if (envelope != null && envelope.getPayload() != null) {
+                    return envelope.getPayload();
+                }
+            }
+            WebhookSendRequest request = gson.fromJson(json, WebhookSendRequest.class);
+            return request == null ? new WebhookSendRequest() : request;
         } catch (Exception e) {
-            return new HashMap<>();
+            return new WebhookSendRequest();
         }
     }
 
-    private String firstString(Object value) {
-        if (value instanceof List && !((List) value).isEmpty()) {
-            return String.valueOf(((List) value).get(0));
-        }
-        return value == null ? "" : String.valueOf(value);
-    }
-
-    private String source(Map<String, Object> requestMap) {
-        String sourcePluginName = firstString(requestMap.get("sourcePluginName"));
-        String notificationType = firstString(requestMap.get("notificationType"));
-        if (!sourcePluginName.isEmpty() || !notificationType.isEmpty()) {
-            return "通知:" + (sourcePluginName.isEmpty() ? notificationType : sourcePluginName);
-        }
-        return "服务调用";
+    private String text(String value) {
+        return value == null ? "" : value;
     }
 
     private void sendResponse(IOSession ioSession,
                               MsgPacket requestPacket,
-                              Map<String, Object> response,
+                              WebhookDeliveryResponse response,
                               int status,
                               String error) {
-        response.put("status", status);
+        response.setStatus(status);
+        response.setError(error);
         if (ActionType.CAPABILITY_INVOKE.name().equals(requestPacket.getMethodStr())) {
             CapabilityInvokeResult result = new CapabilityInvokeResult();
             result.setSuccess(status == 200);
-            result.setData(response);
+            result.setData(response.toMap());
             if (!result.isSuccess()) {
                 result.setErrorMessage(error == null || error.trim().isEmpty() ? "send webhook failed" : error);
             }

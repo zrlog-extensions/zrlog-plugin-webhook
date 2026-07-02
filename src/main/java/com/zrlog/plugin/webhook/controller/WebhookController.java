@@ -6,14 +6,18 @@ import com.zrlog.plugin.data.codec.ContentType;
 import com.zrlog.plugin.data.codec.HttpRequestInfo;
 import com.zrlog.plugin.data.codec.MsgPacket;
 import com.zrlog.plugin.data.codec.MsgPacketStatus;
+import com.zrlog.plugin.webhook.model.WebhookApiResponse;
 import com.zrlog.plugin.webhook.model.WebhookConfig;
+import com.zrlog.plugin.webhook.model.WebhookDeliveryResponse;
+import com.zrlog.plugin.webhook.model.WebhookPageData;
+import com.zrlog.plugin.webhook.model.WebhookRequestParams;
+import com.zrlog.plugin.webhook.model.WebhookSendRequest;
 import com.zrlog.plugin.webhook.model.WebhookSendResult;
 import com.zrlog.plugin.webhook.service.WebhookDeliveryClient;
 import com.zrlog.plugin.webhook.service.WebhookRepository;
 
 import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 
 public class WebhookController {
@@ -34,7 +38,7 @@ public class WebhookController {
 
     public void update() {
         WebhookConfig config = REPOSITORY.saveConfig(session, params());
-        response(successMap(config));
+        response(WebhookApiResponse.success(config));
     }
 
     public void index() {
@@ -50,7 +54,7 @@ public class WebhookController {
 
     public void list() {
         WebhookConfig config = REPOSITORY.readConfig(session);
-        response(successMap(REPOSITORY.page(session, params(), config.getRetentionDays())));
+        response(WebhookApiResponse.success(REPOSITORY.page(session, params(), config.getRetentionDays())));
     }
 
     public void testWebhook() {
@@ -63,93 +67,78 @@ public class WebhookController {
             result.setStatus(400);
             result.setError("Webhook 插件未配置：Webhook 地址");
         } else {
-            Map<String, Object> payload = new HashMap<>();
-            payload.put("channel", WebhookRepository.CHANNEL_WEBHOOK);
-            payload.put("title", title);
-            payload.put("content", content);
-            payload.put("notificationType", "test");
-            payload.put("sourcePluginName", "webhook");
+            WebhookSendRequest payload = new WebhookSendRequest();
+            payload.setChannel(WebhookRepository.CHANNEL_WEBHOOK);
+            payload.setTitle(title);
+            payload.setContent(content);
+            payload.setNotificationType("test");
+            payload.setSourcePluginName("webhook");
             result = webhookDeliveryClient.send(session, config, payload);
         }
         REPOSITORY.record(session, WebhookRepository.DIRECTION_OUTBOUND, WebhookRepository.CHANNEL_WEBHOOK,
                 title, content, "测试发送", result.isSuccess(), result.getStatus(), result.getError(), "");
-        Map<String, Object> data = new HashMap<>();
-        data.put("status", result.getStatus());
-        data.put("responseBody", result.getResponseBody());
-        data.put("error", result.getError());
-        response(result.isSuccess() ? successMap(data) : errorMap(result.getError(), data));
+        WebhookDeliveryResponse data = WebhookDeliveryResponse.from(result);
+        response(result.isSuccess() ? WebhookApiResponse.success(data) : WebhookApiResponse.error(result.getError(), data));
     }
 
     public void incoming() {
         WebhookConfig config = REPOSITORY.readConfig(session);
-        Map<String, Object> params = params();
+        WebhookRequestParams params = params();
         if (!authPassed(config, params)) {
             REPOSITORY.record(session, WebhookRepository.DIRECTION_INBOUND, WebhookRepository.CHANNEL_INCOMING,
                     "Webhook 请求", "未授权请求", "公开入口", false, 401, "Invalid token", "");
-            Map<String, Object> data = new HashMap<>();
-            data.put("status", 401);
-            response(errorMap("Invalid token", data));
+            response(WebhookApiResponse.error("Invalid token", new WebhookDeliveryResponse(401)));
             return;
         }
         String rawBody = bodyText();
-        String title = firstNonBlank(firstString(params.get("title")), "Webhook 消息");
-        String content = firstNonBlank(firstString(params.get("content")),
-                firstString(params.get("text")),
-                firstString(params.get("message")),
+        String title = firstNonBlank(params.getTitle(), "Webhook 消息");
+        String content = firstNonBlank(params.getContent(),
+                params.getText(),
+                params.getMessage(),
                 rawBody);
-        if (!notBlank(content) && !params.isEmpty()) {
+        if (!notBlank(content) && params.hasIncomingPayload()) {
             content = gson.toJson(params);
         }
-        String source = firstNonBlank(firstString(params.get("source")), "公开 Webhook");
-        String requestId = firstString(params.get("requestId"));
+        String source = firstNonBlank(params.getSource(), "公开 Webhook");
+        String requestId = firstNonBlank(params.getRequestId());
         REPOSITORY.record(session, WebhookRepository.DIRECTION_INBOUND, WebhookRepository.CHANNEL_INCOMING,
                 title, content, source, true, 200, "", requestId);
-        Map<String, Object> data = new HashMap<>();
-        data.put("status", 200);
-        response(successMap(data));
+        response(WebhookApiResponse.success(new WebhookDeliveryResponse(200)));
     }
 
-    private Map<String, Object> pageData() {
+    private WebhookApiResponse<WebhookPageData> pageData() {
         WebhookConfig config = REPOSITORY.readConfig(session);
         Map<String, Object> overview = REPOSITORY.overview(session, config.getRetentionDays());
-        Map<String, Object> firstPageParams = new HashMap<>();
-        firstPageParams.put("page", "1");
-        firstPageParams.put("pageSize", "10");
-        Map<String, Object> data = new HashMap<>();
-        data.put("dark", requestInfo.isDarkMode());
-        data.put("colorPrimary", requestInfo.getAdminColorPrimary());
-        data.put("plugin", session.getPlugin());
-        data.put("config", config);
-        data.put("summary", overview.get("summary"));
-        data.put("trend", overview.get("trend"));
-        data.put("logs", REPOSITORY.page(session, firstPageParams, config.getRetentionDays()));
-        data.put("incomingPath", "/p/webhook/incoming");
-        return successMap(data);
+        WebhookRequestParams firstPageParams = new WebhookRequestParams();
+        firstPageParams.setPage("1");
+        firstPageParams.setPageSize("10");
+        WebhookPageData data = new WebhookPageData();
+        data.setDark(requestInfo.isDarkMode());
+        data.setColorPrimary(requestInfo.getAdminColorPrimary());
+        data.setPlugin(session.getPlugin());
+        data.setConfig(config);
+        data.setSummary(overview.get("summary"));
+        data.setTrend(overview.get("trend"));
+        data.setLogs(REPOSITORY.page(session, firstPageParams, config.getRetentionDays()));
+        data.setIncomingPath("/p/webhook/incoming");
+        return WebhookApiResponse.success(data);
     }
 
-    private Map<String, Object> params() {
+    private WebhookRequestParams params() {
         if (requestInfo.getRequestBody() != null && requestInfo.getRequestBody().length > 0) {
-            Map<String, Object> jsonBody = parseJsonBody(bodyText().trim());
+            WebhookRequestParams jsonBody = parseJsonBody(bodyText().trim());
             if (jsonBody != null) {
                 return jsonBody;
             }
         }
-        return paramMap();
+        return WebhookRequestParams.fromParams(this::hasParam, this::paramObject);
     }
 
-    private Map<String, Object> paramMap() {
-        if (requestInfo.getParam() == null) {
-            return new HashMap<>();
-        }
-        return requestInfo.simpleParam();
-    }
-
-    @SuppressWarnings("unchecked")
-    private Map<String, Object> parseJsonBody(String body) {
+    private WebhookRequestParams parseJsonBody(String body) {
         try {
-            Map<String, Object> map = gson.fromJson(body, Map.class);
-            if (map != null) {
-                return map;
+            WebhookRequestParams params = gson.fromJson(body, WebhookRequestParams.class);
+            if (params != null) {
+                return params;
             }
         } catch (Exception ignored) {
             // The host may pass a ByteBuffer backing array with trailing bytes.
@@ -159,11 +148,23 @@ public class WebhookController {
             return null;
         }
         try {
-            Map<String, Object> map = gson.fromJson(body.substring(0, objectEnd + 1), Map.class);
-            return map == null ? null : map;
+            WebhookRequestParams params = gson.fromJson(body.substring(0, objectEnd + 1), WebhookRequestParams.class);
+            return params == null ? null : params;
         } catch (Exception ignored) {
             return null;
         }
+    }
+
+    private boolean hasParam(String key) {
+        return requestInfo.getParam() != null && requestInfo.getParam().containsKey(key);
+    }
+
+    private Object paramObject(String key) {
+        if (!hasParam(key)) {
+            return null;
+        }
+        String[] values = requestInfo.getParam().get(key);
+        return values.length == 1 ? values[0] : values;
     }
 
     private String bodyText() {
@@ -178,11 +179,11 @@ public class WebhookController {
         return new String(bytes, 0, length, StandardCharsets.UTF_8);
     }
 
-    private boolean authPassed(WebhookConfig config, Map<String, Object> params) {
+    private boolean authPassed(WebhookConfig config, WebhookRequestParams params) {
         if (!notBlank(config.getIncomingToken())) {
             return false;
         }
-        String token = firstNonBlank(bearerToken(), headerValue("X-Webhook-Token"), firstString(params.get("token")));
+        String token = firstNonBlank(bearerToken(), headerValue("X-Webhook-Token"), params.getToken());
         return config.getIncomingToken().equals(token);
     }
 
@@ -214,13 +215,6 @@ public class WebhookController {
         return "";
     }
 
-    private String firstString(Object value) {
-        if (value instanceof List && !((List) value).isEmpty()) {
-            return String.valueOf(((List) value).get(0));
-        }
-        return value == null ? "" : String.valueOf(value);
-    }
-
     private String firstNonBlank(String... values) {
         for (String value : values) {
             if (notBlank(value)) {
@@ -230,24 +224,9 @@ public class WebhookController {
         return "";
     }
 
-    private void response(Map<String, Object> map) {
-        session.sendMsg(ContentType.JSON, map, requestPacket.getMethodStr(), requestPacket.getMsgId(),
-                Boolean.FALSE.equals(map.get("success")) ? MsgPacketStatus.RESPONSE_ERROR : MsgPacketStatus.RESPONSE_SUCCESS);
-    }
-
-    private Map<String, Object> successMap(Object data) {
-        Map<String, Object> map = new HashMap<>();
-        map.put("success", true);
-        map.put("data", data);
-        return map;
-    }
-
-    private Map<String, Object> errorMap(String message, Object data) {
-        Map<String, Object> map = new HashMap<>();
-        map.put("success", false);
-        map.put("message", message);
-        map.put("data", data);
-        return map;
+    private void response(WebhookApiResponse<?> response) {
+        session.sendMsg(ContentType.JSON, response, requestPacket.getMethodStr(), requestPacket.getMsgId(),
+                response.isSuccess() ? MsgPacketStatus.RESPONSE_SUCCESS : MsgPacketStatus.RESPONSE_ERROR);
     }
 
     private boolean notBlank(String value) {

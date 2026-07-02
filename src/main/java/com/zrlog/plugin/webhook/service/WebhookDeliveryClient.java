@@ -7,6 +7,8 @@ import com.zrlog.plugin.common.type.HttpMethod;
 import com.zrlog.plugin.data.codec.BaseHttpRequestInfo;
 import com.zrlog.plugin.data.codec.HttpResponseInfo;
 import com.zrlog.plugin.webhook.model.WebhookConfig;
+import com.zrlog.plugin.webhook.model.WebhookRemoteResponse;
+import com.zrlog.plugin.webhook.model.WebhookSendRequest;
 import com.zrlog.plugin.webhook.model.WebhookSendResult;
 
 import javax.crypto.Mac;
@@ -22,7 +24,7 @@ public class WebhookDeliveryClient {
 
     private final Gson gson = new Gson();
 
-    public WebhookSendResult send(IOSession session, WebhookConfig config, Map<String, Object> payload) {
+    public WebhookSendResult send(IOSession session, WebhookConfig config, WebhookSendRequest payload) {
         WebhookSendResult result = new WebhookSendResult();
         try {
             BaseHttpRequestInfo requestInfo = new BaseHttpRequestInfo();
@@ -62,31 +64,31 @@ public class WebhookDeliveryClient {
         }
     }
 
-    private Map<String, Object> requestBody(WebhookConfig config, Map<String, Object> payload) throws Exception {
+    private Map<String, Object> requestBody(WebhookConfig config, WebhookSendRequest payload) throws Exception {
         if (WebhookRepository.TARGET_FEISHU.equals(config.getTargetType())) {
             return feishuTextPayload(config, payload);
         }
         return genericJsonPayload(payload);
     }
 
-    private Map<String, Object> genericJsonPayload(Map<String, Object> payload) {
+    private Map<String, Object> genericJsonPayload(WebhookSendRequest payload) {
         Map<String, Object> body = new LinkedHashMap<>();
-        body.put("sourcePluginId", payload.get("sourcePluginId"));
-        body.put("sourcePluginName", payload.get("sourcePluginName"));
-        body.put("sourceCapabilityKey", payload.get("sourceCapabilityKey"));
-        body.put("eventType", payload.get("eventType"));
-        body.put("notificationType", payload.get("notificationType"));
-        body.put("channel", payload.get("channel"));
-        body.put("title", payload.get("title"));
-        body.put("content", payload.get("content"));
-        body.put("level", payload.get("level"));
-        body.put("requestId", payload.get("requestId"));
-        body.put("traceId", payload.get("traceId"));
-        body.put("payload", payload.get("payload"));
+        body.put("sourcePluginId", payload.getSourcePluginId());
+        body.put("sourcePluginName", payload.getSourcePluginName());
+        body.put("sourceCapabilityKey", payload.getSourceCapabilityKey());
+        body.put("eventType", payload.getEventType());
+        body.put("notificationType", payload.getNotificationType());
+        body.put("channel", payload.getChannel());
+        body.put("title", payload.getTitle());
+        body.put("content", payload.getContent());
+        body.put("level", payload.getLevel());
+        body.put("requestId", payload.getRequestId());
+        body.put("traceId", payload.getTraceId());
+        body.put("payload", payload.getPayload());
         return body;
     }
 
-    private Map<String, Object> feishuTextPayload(WebhookConfig config, Map<String, Object> payload) throws Exception {
+    private Map<String, Object> feishuTextPayload(WebhookConfig config, WebhookSendRequest payload) throws Exception {
         Map<String, Object> body = new LinkedHashMap<>();
         if (notBlank(config.getSigningSecret())) {
             long timestamp = System.currentTimeMillis() / 1000;
@@ -95,7 +97,7 @@ public class WebhookDeliveryClient {
         }
         body.put("msg_type", "text");
         Map<String, Object> textContent = new LinkedHashMap<>();
-        textContent.put("text", stringValue(payload.get("title")) + "\n" + stringValue(payload.get("content")));
+        textContent.put("text", stringValue(payload.getTitle()) + "\n" + stringValue(payload.getContent()));
         body.put("content", textContent);
         return body;
     }
@@ -115,39 +117,16 @@ public class WebhookDeliveryClient {
             return "";
         }
         try {
-            Map response = gson.fromJson(responseBody, Map.class);
-            Number code = numberValue(response.get("code"));
-            if (code == null) {
-                code = numberValue(response.get("statusCode"));
-            }
-            if (code == null) {
-                code = numberValue(response.get("StatusCode"));
-            }
+            WebhookRemoteResponse response = gson.fromJson(responseBody, WebhookRemoteResponse.class);
+            Number code = response == null ? null : response.errorCode();
             if (code != null && code.intValue() != 0) {
-                Object message = response.get("msg");
-                if (message == null) {
-                    message = response.get("message");
-                }
+                String message = response.errorMessage();
                 return "Webhook " + code.intValue() + ": " + (message == null ? responseBody : String.valueOf(message));
             }
         } catch (Exception ignored) {
             return "";
         }
         return "";
-    }
-
-    private Number numberValue(Object value) {
-        if (value instanceof Number) {
-            return (Number) value;
-        }
-        if (value == null) {
-            return null;
-        }
-        try {
-            return Double.parseDouble(String.valueOf(value));
-        } catch (Exception e) {
-            return null;
-        }
     }
 
     private String stringValue(Object value) {

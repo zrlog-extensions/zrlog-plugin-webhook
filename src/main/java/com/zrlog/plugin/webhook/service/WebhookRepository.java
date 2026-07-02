@@ -4,9 +4,14 @@ import com.google.gson.Gson;
 import com.zrlog.plugin.IOSession;
 import com.zrlog.plugin.common.LoggerUtil;
 import com.zrlog.plugin.common.SessionKvRepository;
+import com.zrlog.plugin.data.codec.ContentType;
+import com.zrlog.plugin.type.ActionType;
 import com.zrlog.plugin.webhook.model.WebhookConfig;
+import com.zrlog.plugin.webhook.model.WebhookConfigValues;
 import com.zrlog.plugin.webhook.model.WebhookLogEntry;
 import com.zrlog.plugin.webhook.model.WebhookLogStore;
+import com.zrlog.plugin.webhook.model.WebhookRequestParams;
+import com.zrlog.plugin.webhook.model.WebsiteKeyRequest;
 
 import java.nio.charset.StandardCharsets;
 import java.text.SimpleDateFormat;
@@ -59,42 +64,43 @@ public class WebhookRepository {
     }
 
     public synchronized WebhookConfig readConfig(IOSession session) {
-        Map<String, Object> responseMap = SessionKvRepository.of(session).read(CONFIG_KEYS);
+        WebhookConfigValues response = session.getResponseSync(ContentType.JSON, WebsiteKeyRequest.of(CONFIG_KEYS),
+                ActionType.GET_WEBSITE, WebhookConfigValues.class);
+        if (response == null) {
+            response = new WebhookConfigValues();
+        }
         WebhookConfig config = new WebhookConfig();
-        config.setWebhookUrl(firstNonBlank(stringValue(responseMap.get(WEBHOOK_URL_KEY)),
-                stringValue(responseMap.get(LEGACY_FEISHU_WEBHOOK_URL_KEY))));
-        config.setTargetType(normalizeTargetType(stringValue(responseMap.get(TARGET_TYPE_KEY))));
-        config.setSigningSecret(firstNonBlank(stringValue(responseMap.get(SIGNING_SECRET_KEY)),
-                stringValue(responseMap.get(LEGACY_FEISHU_SECRET_KEY))));
-        config.setIncomingToken(stringValue(responseMap.get(INCOMING_TOKEN_KEY)));
-        config.setTimeoutSeconds(normalizeTimeoutSeconds(stringValue(responseMap.get(TIMEOUT_SECONDS_KEY))));
-        config.setRetentionDays(normalizeRetentionDays(stringValue(responseMap.get(RETENTION_DAYS_KEY))));
+        config.setWebhookUrl(firstNonBlank(response.getWebhookUrl(), response.getFeishuWebhookUrl()));
+        config.setTargetType(normalizeTargetType(response.getWebhookTargetType()));
+        config.setSigningSecret(firstNonBlank(response.getWebhookSigningSecret(), response.getFeishuSecret()));
+        config.setIncomingToken(defaultText(response.getWebhookIncomingToken(), ""));
+        config.setTimeoutSeconds(normalizeTimeoutSeconds(response.getWebhookTimeoutSeconds()));
+        config.setRetentionDays(normalizeRetentionDays(response.getWebhookLogRetentionDays()));
         return config;
     }
 
-    public synchronized WebhookConfig saveConfig(IOSession session, Map<String, Object> params) {
+    public synchronized WebhookConfig saveConfig(IOSession session, WebhookRequestParams params) {
+        if (params == null) {
+            params = new WebhookRequestParams();
+        }
         WebhookConfig existing = readConfig(session);
         WebhookConfig config = new WebhookConfig();
-        config.setWebhookUrl(limit(valueOrExisting(params, existing.getWebhookUrl(),
-                WEBHOOK_URL_KEY, LEGACY_FEISHU_WEBHOOK_URL_KEY), 1000));
-        config.setTargetType(normalizeTargetType(valueOrExisting(params, existing.getTargetType(),
-                TARGET_TYPE_KEY, "targetType")));
-        config.setSigningSecret(limit(valueOrExisting(params, existing.getSigningSecret(),
-                SIGNING_SECRET_KEY, LEGACY_FEISHU_SECRET_KEY), 240));
-        String incomingToken = limit(stringValue(params.get("incomingToken")), 160);
+        config.setWebhookUrl(limit(valueOrExisting(existing.getWebhookUrl(),
+                params.getWebhookUrl(), params.getFeishuWebhookUrl()), 1000));
+        config.setTargetType(normalizeTargetType(valueOrExisting(existing.getTargetType(),
+                params.getWebhookTargetType(), params.getTargetType())));
+        config.setSigningSecret(limit(valueOrExisting(existing.getSigningSecret(),
+                params.getWebhookSigningSecret(), params.getFeishuSecret()), 240));
+        String incomingToken = limit(firstPresent(params.getWebhookIncomingToken(), params.getIncomingToken()), 160);
         config.setIncomingToken(notBlank(incomingToken) ? incomingToken : existing.getIncomingToken());
         if (!notBlank(config.getIncomingToken())) {
             config.setIncomingToken(newToken());
         }
-        String timeoutSeconds = stringValue(params.get(TIMEOUT_SECONDS_KEY));
-        if (!notBlank(timeoutSeconds)) {
-            timeoutSeconds = stringValue(params.get("timeoutSeconds"));
-        }
+        String timeoutSeconds = firstPresent(params.getWebhookTimeoutSeconds(), params.getTimeoutSeconds());
+        timeoutSeconds = timeoutSeconds == null ? String.valueOf(existing.getTimeoutSeconds()) : timeoutSeconds;
         config.setTimeoutSeconds(normalizeTimeoutSeconds(timeoutSeconds));
-        String retentionDays = stringValue(params.get(RETENTION_DAYS_KEY));
-        if (!notBlank(retentionDays)) {
-            retentionDays = stringValue(params.get("retentionDays"));
-        }
+        String retentionDays = firstPresent(params.getWebhookLogRetentionDays(), params.getRetentionDays());
+        retentionDays = retentionDays == null ? String.valueOf(existing.getRetentionDays()) : retentionDays;
         config.setRetentionDays(normalizeRetentionDays(retentionDays));
 
         Map<String, String> request = new HashMap<>();
@@ -163,12 +169,15 @@ public class WebhookRepository {
         return data;
     }
 
-    public synchronized Map<String, Object> page(IOSession session, Map<String, Object> params, int retentionDays) {
-        int page = Math.max(1, parseInt(stringValue(params.get("page")), 1));
-        int pageSize = Math.max(1, Math.min(100, parseInt(stringValue(params.get("pageSize")), 10)));
-        String keyword = stringValue(params.get("keyword")).toLowerCase();
-        String status = stringValue(params.get("status"));
-        String direction = stringValue(params.get("direction"));
+    public synchronized Map<String, Object> page(IOSession session, WebhookRequestParams params, int retentionDays) {
+        if (params == null) {
+            params = new WebhookRequestParams();
+        }
+        int page = Math.max(1, parseInt(defaultText(params.getPage(), ""), 1));
+        int pageSize = Math.max(1, Math.min(100, parseInt(defaultText(params.getPageSize(), ""), 10)));
+        String keyword = defaultText(params.getKeyword(), "").toLowerCase();
+        String status = defaultText(params.getStatus(), "");
+        String direction = defaultText(params.getDirection(), "");
         List<WebhookLogEntry> logs = listRecentLogs(session, retentionDays);
         Collections.sort(logs, new Comparator<WebhookLogEntry>() {
             @Override
@@ -327,25 +336,24 @@ public class WebhookRepository {
         }
     }
 
-    private String stringValue(Object value) {
-        if (value == null) {
-            return "";
-        }
-        if (value instanceof List && !((List) value).isEmpty()) {
-            return String.valueOf(((List) value).get(0));
-        }
-        return String.valueOf(value);
-    }
-
-    private String valueOrExisting(Map<String, Object> params, String existingValue, String... keys) {
-        if (params != null && keys != null) {
-            for (String key : keys) {
-                if (params.containsKey(key)) {
-                    return stringValue(params.get(key));
-                }
-            }
+    private String valueOrExisting(String existingValue, String... values) {
+        String value = firstPresent(values);
+        if (value != null) {
+            return value;
         }
         return existingValue == null ? "" : existingValue;
+    }
+
+    private String firstPresent(String... values) {
+        if (values == null) {
+            return null;
+        }
+        for (String value : values) {
+            if (value != null) {
+                return value;
+            }
+        }
+        return null;
     }
 
     private String firstNonBlank(String... values) {
