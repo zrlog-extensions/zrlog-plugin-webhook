@@ -6,6 +6,7 @@ import com.zrlog.plugin.data.codec.ContentType;
 import com.zrlog.plugin.data.codec.HttpRequestInfo;
 import com.zrlog.plugin.data.codec.MsgPacket;
 import com.zrlog.plugin.data.codec.MsgPacketStatus;
+import com.zrlog.plugin.data.codec.PluginAppearance;
 import com.zrlog.plugin.webhook.model.WebhookApiResponse;
 import com.zrlog.plugin.webhook.model.WebhookConfig;
 import com.zrlog.plugin.webhook.model.WebhookDeliveryResponse;
@@ -43,7 +44,7 @@ public class WebhookController {
 
     public void index() {
         Map<String, Object> data = new HashMap<>();
-        data.put("theme", requestInfo.isDarkMode() ? "dark" : "light");
+
         data.put("data", gson.toJson(pageData()));
         session.responseHtml("/templates/index", data, requestPacket.getMethodStr(), requestPacket.getMsgId());
     }
@@ -113,6 +114,7 @@ public class WebhookController {
         firstPageParams.setPage("1");
         firstPageParams.setPageSize("10");
         WebhookPageData data = new WebhookPageData();
+        data.setAppearance(PluginAppearance.from(requestInfo));
         data.setDark(requestInfo.isDarkMode());
         data.setColorPrimary(requestInfo.getAdminColorPrimary());
         data.setPlugin(session.getPlugin());

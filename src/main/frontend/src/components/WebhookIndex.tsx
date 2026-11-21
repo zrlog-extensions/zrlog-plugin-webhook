@@ -1,4 +1,14 @@
-import {CopyOutlined, ReloadOutlined, SendOutlined, SettingOutlined} from "@ant-design/icons";
+import {getUiThemeDefinition} from "@zrlog/ui/themes";
+import Input from "@zrlog/ui/antd/Input";
+import InputNumber from "@zrlog/ui/antd/InputNumber";
+import Table from "@zrlog/ui/antd/Table";
+import Tag from "@zrlog/ui/antd/Tag";
+import Typography from "@zrlog/ui/antd/Typography";
+import {useUiApp} from "@zrlog/ui/feedback";
+import CopyOutlined from "@zrlog/ui/icons/copy";
+import ReloadOutlined from "@zrlog/ui/icons/refresh";
+import SendOutlined from "@zrlog/ui/icons/send";
+import SettingOutlined from "@zrlog/ui/icons/settings";
 import {Line} from "@ant-design/plots";
 import type {ColumnsType} from "antd/es/table";
 import {
@@ -12,17 +22,11 @@ import {
     Flex,
     Form,
     Grid,
-    Input,
-    InputNumber,
     Row,
     Select,
     Space,
     Statistic,
-    Table,
-    Tag,
     Tooltip,
-    Typography,
-    message,
     theme,
 } from "antd";
 import axios from "axios";
@@ -120,8 +124,11 @@ const WebhookIndex: FunctionComponent<WebhookIndexProps> = ({data}) => {
     const [settingOpen, setSettingOpen] = useState(false);
     const [detail, setDetail] = useState<WebhookLogRow | null>(null);
     const [form] = Form.useForm<WebhookConfig>();
-    const [messageApi, contextHolder] = message.useMessage();
+    const {message: messageApi} = useUiApp();
     const {token} = theme.useToken();
+    const {colorMode} = getUiThemeDefinition(data.appearance?.theme?.trim());
+    const dark = colorMode === "selectable" ? (data.appearance?.dark ?? data.dark) : colorMode === "dark";
+    const chartTheme = dark ? "classicDark" : "classic";
     const screens = Grid.useBreakpoint();
     const isPhone = Boolean(screens.xs && !screens.sm);
     const isCompact = !screens.lg;
@@ -274,7 +281,6 @@ const WebhookIndex: FunctionComponent<WebhookIndexProps> = ({data}) => {
             boxSizing: "border-box",
             margin: "0 auto",
         }}>
-            {contextHolder}
             <Flex
                 justify="space-between"
                 align={isCompact ? "stretch" : "flex-start"}
@@ -355,8 +361,9 @@ const WebhookIndex: FunctionComponent<WebhookIndexProps> = ({data}) => {
                         autoFit
                         xField="date"
                         yField="value"
-                        color={data.colorPrimary || token.colorPrimary}
-                        point={{size: 3}}
+                        style={{stroke: token.colorPrimary}}
+                        theme={chartTheme}
+                        point={{size: 3, style: {fill: token.colorPrimary, stroke: token.colorPrimary}}}
                     />
                 )}
             </Card>

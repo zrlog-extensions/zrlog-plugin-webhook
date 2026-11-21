@@ -1,8 +1,12 @@
 package com.zrlog.plugin.webhook.model;
 
+import com.zrlog.plugin.data.codec.PluginAppearance;
+
 import com.zrlog.plugin.message.Plugin;
 
 public class WebhookPageData {
+
+    private PluginAppearance appearance;
 
     private boolean dark;
     private String colorPrimary;
@@ -75,5 +79,8 @@ public class WebhookPageData {
 
     public void setIncomingPath(String incomingPath) {
         this.incomingPath = incomingPath;
+    }
+    public void setAppearance(PluginAppearance appearance) {
+        this.appearance = appearance;
     }
 }
